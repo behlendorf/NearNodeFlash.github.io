@@ -55,57 +55,44 @@ The proposal below outlines the high level behavior of running containers in a w
 
 ### Container Assignment to Rabbit Nodes
 
-During `Proposal`, the USER must assign compute nodes for the container workflow. The assigned
-compute nodes determine which Rabbit nodes run the containers.
+During `Proposal`, the USER must assign compute nodes for the container workflow. The assigned compute nodes determine which Rabbit nodes run the containers.
 
 ### Communication Details
 
-The following subsections outline the proposed communication between the Rabbit nodes themselves and
-the Compute nodes.
+The following subsections outline the proposed communication between the Rabbit nodes themselves and the Compute nodes.
 
 #### Rabbit-to-Rabbit Communication
 
-Each rabbit node can be reached via `<hostname>.<subdomain>` using DNS. The hostname is a
-combination of the workflow name and Rabbit node name. The workflow name is used for the subdomain.
+Each rabbit node can be reached via `<hostname>.<subdomain>` using DNS. The hostname is a combination of the workflow name and Rabbit node name. The workflow name is used for the subdomain.
 
 For example, a workflow name of `foo` that targets `rabbit-node2` would be `foo-rabbit-node2.foo`.
 
-Environment variables are provided to the container and ConfigMap for each rabbit that is targeted
-by the container workflow:
+Environment variables are provided to the container and ConfigMap for each rabbit that is targeted by the container workflow:
 
 ```shell
-RABBIT_HOSTS=foo-rabbit-node2,foo-rabbit-node3
-RABBIT_SUBDOMAIN=foo
-RABBIT_DOMAIN=default.svc.cluster.local
+NNF_CONTAINER_NODES=foo-rabbit-node2,foo-rabbit-node3
+NNF_CONTAINER_SUBDOMAIN=foo
+NNF_CONTAINER_DOMAIN=default.svc.cluster.local
 ```
 
 ```yaml
 kind: ConfigMap
 apiVersion: v1
 data:
-  rabbitHosts:
+  nnfContainerNodes:
     - foo-rabbit-node2
     - foo-rabbit-node3
-  rabbitSubdomain: foo
-  rabbitDomain: default.svc.cluster.local
+  nnfContainerSubdomain: foo
+  nnfContainerDomain: default.svc.cluster.local
 ```
 
 DNS can then be used to communicate with other Rabbit containers. The FQDN for the container running on rabbit-node2 is `foo-rabbit-node2.foo.default.svc.cluster.local`.
 
 #### Compute-to-Rabbit Communication
 
-For Compute to Rabbit communication, the proposal is to use an open port between the nodes, so the
-applications could communicate using IP protocol.  The port number would be assigned by the Rabbit
-software and included in the workflow resource's environmental variables after the Setup state
-(similar to workflow name & namespace).  Flux should provide the port number to the compute
-application via an environmental variable or command line argument. The containerized application
-would always see the same port number using the `hostPort`/`containerPort` mapping functionality
-included in Kubernetes. To clarify, the Rabbit software is picking and managing the ports picked for
-`hostPort`.
+For Compute to Rabbit communication, the proposal is to use an open port between the nodes, so the applications could communicate using IP protocol.  The port number would be assigned by the Rabbit software and included in the workflow resource's environmental variables after the Setup state (similar to workflow name & namespace).  Flux should provide the port number to the compute application via an environmental variable or command line argument. The containerized application would always see the same port number using the `hostPort`/`containerPort` mapping functionality included in Kubernetes. To clarify, the Rabbit software is picking and managing the ports picked for `hostPort`.
 
-This requires a range of ports to be open in the firewall configuration and specified in the rabbit
-system configuration. The fewer the number of ports available increases the chances of a port
-reservation conflict that would fail a workflow.
+This requires a range of ports to be open in the firewall configuration and specified in the rabbit system configuration. The fewer the number of ports available increases the chances of a port reservation conflict that would fail a workflow.
 
 Example port range definition in the SystemConfiguration:
 
@@ -124,8 +111,7 @@ items:
 
 ## Example
 
-Say I authored a simple application, `foo`, that requires Rabbit local GFS2 storage and a persistent Lustre storage volume. As the author,
-my program is coded to expect the GFS2 volume is mounted at `/foo/local` and the Lustre volume is mounted at `/foo/persistent`
+Say I authored a simple application, `foo`, that requires Rabbit local GFS2 storage and a persistent Lustre storage volume. As the author, my program is coded to expect the GFS2 volume is mounted at `/foo/local` and the Lustre volume is mounted at `/foo/persistent`
 
 Working with an administrator, my application's storage requirements and pod specification are placed in an NNF Container Profile `foo`:
 
@@ -220,7 +206,7 @@ Peter submits the job to the WLM. WLM guides the job through the workflow states
                         mountPath: /foo/local
                       - name: foo-persistent-storage
                         mountPath: /foo/persistent
-                      - name: nnf-config 
+                      - name: nnf-config
                         mountPath: /nnf/config
                       ports:
                         - name: compute
@@ -256,9 +242,9 @@ Peter submits the job to the WLM. WLM guides the job through the workflow states
 
 Kubernetes allows for a way to define permissions for a container using a [Security Context](https://kubernetes.io/docs/tasks/configure-pod-container/security-context/). This can be seen in the pod template spec above. The user and group IDs are inherited from the Workflow's spec.
 
-## Special Note: Indexed-Mount Type
+## Special Note: Indexed-Mount Type for GFS2 File Systems
 
-When using a file system like XFS or GFS2, each compute is allocated its own Rabbit volume. The Rabbit software mounts a collection of mount paths with a common prefix and an ending indexed value.
+When using a GFS2 file system, each compute is allocated its own Rabbit volume. The Rabbit software mounts a collection of mount paths with a common prefix and an ending indexed value.
 
 Application AUTHORS must be aware that their desired mount-point really contains a collection of directories, one for each compute node. The mount point type can be known by consulting the config map values.
 
